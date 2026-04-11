@@ -1,6 +1,6 @@
 {
-  "version": "2.1.4",
-  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.1.4/AgenteVozTaxi24H-2.1.4-Setup.exe",
-  "release_notes": "Configuracion de claves API movida al primer arranque de la app (sin wizard en el instalador). Instalador reducido de 174 MB a 46 MB.",
-  "sha256": "e04bd7fd135b0855537cdc54663f060aee9c989d950a1a0e2bfeb2f1f5ae1df0"
+  "version": "2.1.5",
+  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.1.5/AgenteVozTaxi24H-2.1.5-Setup.exe",
+  "release_notes": "Mejora geocodificacion: prioriza municipio mencionado por el cliente y reintenta con nombre catalan de la calle (ej. Lepant en lugar de Lepanto).",
+  "sha256": "2ec7f4d50eaa8e67b725c4783833ce18eba5e9f54ec2612c4be6377210888d2e"
 }
