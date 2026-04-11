@@ -1,6 +1,6 @@
 {
-  "version": "2.1.3",
-  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.1.3/AgenteVozTaxi24H-2.1.3-Setup.exe",
-  "release_notes": "Primera version estable con sistema de actualizacion integrado y validacion SHA-256.",
-  "sha256": "cbf49ef804fa30506a2eea80442fca3710467133966ac35074b4dd2c884650a0"
+  "version": "2.1.4",
+  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.1.4/AgenteVozTaxi24H-2.1.4-Setup.exe",
+  "release_notes": "Configuracion de claves API movida al primer arranque de la app (sin wizard en el instalador). Instalador reducido de 174 MB a 46 MB.",
+  "sha256": "b96ca818a48d1132016b407f0e4bdad1ef762d69f023440dce098ecb113ab6c8"
 }
