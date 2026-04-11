@@ -1,6 +1,6 @@
 {
   "version": "2.1.3",
   "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.1.3/AgenteVozTaxi24H-2.1.3-Setup.exe",
-  "release_notes": "Version base estable. Sistema de actualizacion con SHA-256 integrado.",
-  "sha256": ""
+  "release_notes": "Primera version estable con sistema de actualizacion integrado y validacion SHA-256.",
+  "sha256": "cbf49ef804fa30506a2eea80442fca3710467133966ac35074b4dd2c884650a0"
 }
