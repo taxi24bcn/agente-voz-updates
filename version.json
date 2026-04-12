@@ -1,6 +1,6 @@
 {
-  "version": "2.1.5",
-  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.1.5/AgenteVozTaxi24H-2.1.5-Setup.exe",
-  "release_notes": "Mejora geocodificacion: prioriza municipio mencionado por el cliente y reintenta con nombre catalan de la calle (ej. Lepant en lugar de Lepanto).",
-  "sha256": "2ec7f4d50eaa8e67b725c4783833ce18eba5e9f54ec2612c4be6377210888d2e"
+  "version": "2.1.6",
+  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.1.6/AgenteVozTaxi24H-2.1.6-Setup.exe",
+  "release_notes": "Fix intersecciones: 'Valencia con Paseo San Juan' ahora geocodifica correctamente el cruce de calles.",
+  "sha256": "239c2b045645ec0242fabc4262627b473570ea4fb6e21159e52f8fe4a072b43b"
 }
