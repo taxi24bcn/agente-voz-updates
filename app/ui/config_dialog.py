@@ -160,10 +160,25 @@ class ConfigDialog(QDialog):
             self._openai_key.setFocus()
             return
 
+        cable_hint = self._cable_hint.text().strip() or "cable output"
+        mic_hint = self._operator_mic.currentText().strip()
+
+        # Evitar guardar un microfono cuyo nombre contiene el hint del cable
+        if mic_hint and cable_hint.lower() in mic_hint.lower():
+            QMessageBox.warning(
+                self,
+                "Dispositivo invalido",
+                f"El microfono seleccionado ('{mic_hint}') parece ser el mismo "
+                f"dispositivo que el cable virtual ('{cable_hint}').\n\n"
+                "Selecciona el microfono fisico del operador.",
+            )
+            self._operator_mic.setFocus()
+            return
+
         save_env_config(
             openai_api_key=openai_key,
-            cable_hint=self._cable_hint.text().strip() or "cable output",
-            operator_mic_hint=self._operator_mic.currentText().strip(),
+            cable_hint=cable_hint,
+            operator_mic_hint=mic_hint,
             google_maps_api_key=self._maps_key.text().strip(),
         )
         reload_env_file()
