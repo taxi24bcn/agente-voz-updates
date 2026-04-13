@@ -36,6 +36,25 @@ def list_input_devices() -> list[tuple[int, str]]:
     ]
 
 
+def _find_first_non_cable_input(cable_dev: int) -> int | None:
+    """Return index of the first input device that is not the cable device."""
+    for idx, info in enumerate(sd.query_devices()):
+        if info["max_input_channels"] <= 0:
+            continue
+        if idx == cable_dev:
+            continue
+        if "cable" in info["name"].lower():
+            continue
+        # Skip generic Windows devices (they mirror real ones)
+        name_lower = info["name"].lower()
+        if "asignador de sonido" in name_lower:
+            continue
+        if "controlador primario" in name_lower:
+            continue
+        return idx
+    return None
+
+
 def resolve_capture_devices(cable_hint: str, mic_hint: str) -> tuple[int, int]:
     """Return (cable_device_index, mic_device_index) or raise RuntimeError."""
     cable_dev = find_input_device(cable_hint)
@@ -53,11 +72,14 @@ def resolve_capture_devices(cable_hint: str, mic_hint: str) -> tuple[int, int]:
                 "Revisa OPERATOR_MIC_HINT en .env."
             )
     else:
+        # Auto-detect: first try default device, then first non-cable input
         mic_dev = default_input_device()
+        if mic_dev is None or mic_dev == cable_dev:
+            mic_dev = _find_first_non_cable_input(cable_dev)
         if mic_dev is None:
             raise RuntimeError(
-                "No hay dispositivo de entrada por defecto del sistema. "
-                "Define OPERATOR_MIC_HINT en .env."
+                "No se encontro ningun microfono fisico. "
+                "Conecta un microfono o define OPERATOR_MIC_HINT en .env."
             )
     if mic_dev == cable_dev:
         raise RuntimeError(

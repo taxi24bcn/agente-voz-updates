@@ -32,7 +32,27 @@ Softphone con el que se gestionan las llamadas.
 
 1. Descargar e instalar MicroSIP
 2. Añadir la cuenta SIP (servidor, usuario, contraseña) — datos del proveedor de telefonía
-3. En ajustes de audio de MicroSIP → salida de audio: **CABLE Input (VB-Audio Virtual Cable)**
+3. En MicroSIP → Herramientas → Ajustes, configurar audio:
+
+| Campo | Valor |
+|---|---|
+| **Dispositivo de llamada** | Predeterminado |
+| **Altavoz** | **CABLE Input (VB-Audio Virtual Cable)** |
+| **Micrófono** | Micrófono físico del PC (Realtek, Conexant, etc. — cualquiera que NO sea CABLE) |
+
+### 3. Configurar audio de Windows — para que el operador oiga las llamadas
+
+Al poner el altavoz de MicroSIP en CABLE Input, el audio de la llamada va al cable virtual y el operador no lo oye directamente. Hay que activar la repetición en Windows:
+
+1. Pulsar `Windows + R`, escribir `mmsys.cpl` y pulsar Enter
+2. Ir a la pestaña **Grabacion**
+3. Click derecho en **CABLE Output** → **Propiedades**
+4. Ir a la pestaña **Escuchar**
+5. Marcar **"Escuchar este dispositivo"**
+6. En el desplegable **"Reproducir en este dispositivo"** → seleccionar los **altavoces fisicos** del PC (Realtek, Conexant, etc.)
+7. Pulsar **Aceptar**
+
+Esto hace que el audio de la llamada llegue a la app (para transcribir) Y a los altavoces (para que el operador oiga) al mismo tiempo.
 
 ---
 
@@ -71,6 +91,7 @@ Las claves se guardan localmente en `%LOCALAPPDATA%\Taxi24H\AgenteVoz\config\.en
 
 | Versión | Fecha | Novedades |
 |---|---|---|
+| 2.2.0 | 2026-04-13 | Auto-detección micrófono + guía audio Windows en README |
 | 2.1.7 | 2026-04-13 | Fix selector de micrófono en configuración inicial |
 | 2.1.6 | 2026-04-12 | Fix geocodificación intersecciones |
 | 2.1.5 | 2026-04-12 | Mejora geocodificación municipio + catalán |
