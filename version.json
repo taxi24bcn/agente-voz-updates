@@ -1,6 +1,6 @@
 {
-  "version": "2.1.6",
-  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.1.6/AgenteVozTaxi24H-2.1.6-Setup.exe",
-  "release_notes": "Fix intersecciones: 'Valencia con Paseo San Juan' ahora geocodifica correctamente el cruce de calles.",
-  "sha256": "239c2b045645ec0242fabc4262627b473570ea4fb6e21159e52f8fe4a072b43b"
+  "version": "2.1.7",
+  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.1.7/AgenteVozTaxi24H-2.1.7-Setup.exe",
+  "release_notes": "Fix selector de micrófono en configuración inicial — al instalar en un PC nuevo ahora se muestra un desplegable con todos los micrófonos disponibles.",
+  "sha256": "c601038941165545055664974233e03a8de18da297d493722a5701a114658b3b"
 }

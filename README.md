@@ -1,13 +1,94 @@
-# Agente Voz Taxi24H — Canal de actualizaciones
+# Agente Voz Taxi24H
 
-Este repositorio es el canal público de distribución de actualizaciones del Agente Voz Taxi24H.
+Asistente de voz para operadores de taxi. Escucha las llamadas en tiempo real y extrae automáticamente los datos del servicio: recogida, destino, nombre del cliente y número de teléfono.
 
-## Contenido
+---
 
-- `version.json` — versión actual disponible, URL de descarga y hash SHA-256
-- Releases — instaladores `Setup.exe` adjuntos a cada release
+## Descarga
 
-## Formato de version.json
+Descarga el instalador desde la sección [Releases](https://github.com/taxi24bcn/agente-voz-updates/releases/latest) → archivo `AgenteVozTaxi24H-X.X.X-Setup.exe`
+
+---
+
+## Requisitos previos
+
+Antes de instalar el agente necesitas estos dos programas:
+
+### 1. VB-CABLE — cable de audio virtual
+
+Captura el audio de las llamadas telefónicas.
+
+**Descarga oficial:** [vb-audio.com/Cable](https://vb-audio.com/Cable/)
+
+1. Descargar e instalar VB-CABLE
+2. Reiniciar el PC tras la instalación
+3. Verificar que aparecen "CABLE Input" y "CABLE Output" en los dispositivos de audio de Windows
+
+### 2. MicroSIP — softphone SIP
+
+Softphone con el que se gestionan las llamadas.
+
+**Descarga oficial:** [microsip.org/downloads](https://www.microsip.org/downloads)
+
+1. Descargar e instalar MicroSIP
+2. Añadir la cuenta SIP (servidor, usuario, contraseña) — datos del proveedor de telefonía
+3. En ajustes de audio de MicroSIP → salida de audio: **CABLE Input (VB-Audio Virtual Cable)**
+
+---
+
+## Instalación
+
+1. Ejecutar `AgenteVozTaxi24H-X.X.X-Setup.exe` como administrador
+2. Seguir el asistente
+3. Al finalizar, la app se abre automáticamente
+
+---
+
+## Configuración inicial (primer arranque)
+
+Al abrir la app por primera vez aparece la pantalla de configuración:
+
+| Campo | Qué poner |
+|---|---|
+| **OpenAI API Key** | Clave de la cuenta OpenAI (`sk-...`) |
+| **Google Maps API Key** | Clave de Google Maps Geocoding API (opcional) |
+| **Micrófono operador** | Seleccionar el micrófono físico del operador |
+
+Las claves se guardan localmente en `%LOCALAPPDATA%\Taxi24H\AgenteVoz\config\.env` y nunca se sincronizan.
+
+---
+
+## Requisitos del sistema
+
+- Windows 10 / 11 (64 bits)
+- 4 GB RAM mínimo
+- Conexión a internet (STT y geocodificación)
+- Cuenta OpenAI con acceso a `gpt-4o-transcribe` y `gpt-4o-mini`
+
+---
+
+## Versiones
+
+| Versión | Fecha | Novedades |
+|---|---|---|
+| 2.1.7 | 2026-04-13 | Fix selector de micrófono en configuración inicial |
+| 2.1.6 | 2026-04-12 | Fix geocodificación intersecciones |
+| 2.1.5 | 2026-04-12 | Mejora geocodificación municipio + catalán |
+| 2.1.4 | 2026-04-12 | Config dialog en app, instalador 46 MB |
+| 2.1.3 | 2026-04-11 | Baseline estable |
+
+Ver historial completo en [CHANGELOG.md](CHANGELOG.md)
+
+---
+
+## Para desarrolladores — publicar una nueva versión
+
+1. Generar el instalador con `build_release.bat`
+2. Calcular SHA-256: `(Get-FileHash "AgenteVozTaxi24H-X.X.X-Setup.exe" -Algorithm SHA256).Hash.ToLower()`
+3. Crear release en GitHub con el `Setup.exe` adjunto
+4. Actualizar `version.json` con la nueva versión, URL y SHA-256
+
+### Formato de version.json
 
 ```json
 {
@@ -17,10 +98,3 @@ Este repositorio es el canal público de distribución de actualizaciones del Ag
   "sha256": "hash_sha256_del_instalador_en_minusculas"
 }
 ```
-
-## Cómo publicar una nueva versión
-
-1. Generar el instalador con `build_release.bat`
-2. Calcular SHA-256: `(Get-FileHash "Setup.exe" -Algorithm SHA256).Hash.ToLower()`
-3. Crear release en GitHub con el `Setup.exe` adjunto
-4. Actualizar `version.json` con la nueva versión, URL y SHA-256
