@@ -1,6 +1,6 @@
 {
-  "version": "2.1.7",
-  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.1.7/AgenteVozTaxi24H-2.1.7-Setup.exe",
-  "release_notes": "Fix selector de micrófono en configuración inicial — al instalar en un PC nuevo ahora se muestra un desplegable con todos los micrófonos disponibles.",
-  "sha256": "c601038941165545055664974233e03a8de18da297d493722a5701a114658b3b"
+  "version": "2.2.0",
+  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.2.0/AgenteVozTaxi24H-2.2.0-Setup.exe",
+  "release_notes": "Auto-detección de micrófono en instalaciones nuevas. Ya no requiere configurar OPERATOR_MIC_HINT manualmente. README con guía completa de configuración de audio.",
+  "sha256": "d0f5a96501ff613a0aafa704d9bebb131243e196ab53210e820eb3e47c45d8f5"
 }
