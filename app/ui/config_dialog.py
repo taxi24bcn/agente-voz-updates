@@ -110,8 +110,17 @@ class ConfigDialog(QDialog):
         self._operator_mic.clear()
         # Opcion vacia = usar el dispositivo por defecto del sistema
         self._operator_mic.addItem("", "")
+        cable_hint = self._cable_hint.text().strip().lower() or "cable"
+        first_non_cable = None
         for _idx, name in list_input_devices():
             self._operator_mic.addItem(name, name)
+            if first_non_cable is None and cable_hint not in name.lower():
+                first_non_cable = name
+        # Pre-seleccionar el primer micrófono que no sea el cable virtual
+        if first_non_cable is not None:
+            idx = self._operator_mic.findData(first_non_cable)
+            if idx >= 0:
+                self._operator_mic.setCurrentIndex(idx)
 
     # ── Carga de valores existentes ──────────────────────────────────────────
 
