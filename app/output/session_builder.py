@@ -264,8 +264,14 @@ def compute_quality_review(data: "ServiceData") -> tuple[bool, list[str]]:
 
 def _app_version() -> str:
     try:
-        from app.config.settings import BASE_DIR
-        vf = BASE_DIR / "version.txt"
+        import sys
+        from pathlib import Path
+        if getattr(sys, "frozen", False):
+            base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+        else:
+            from app.config.settings import BASE_DIR
+            base = BASE_DIR
+        vf = base / "version.txt"
         if vf.exists():
             return vf.read_text(encoding="utf-8").strip()
     except Exception:

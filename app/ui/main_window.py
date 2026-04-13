@@ -38,7 +38,7 @@ from app.parser.service_extractor import ServiceData, ServiceExtractor
 from app.stt.realtime_client import RealtimeSTTClient
 from app.stt.transcript_buffer import TranscriptBuffer
 from app.ui.field_widget import FieldWidget
-from app.updater import UpdateChecker, show_update_dialog
+from app.updater import UpdateChecker, read_local_version, show_update_dialog
 
 log = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ class MainWindow(QMainWindow):
     def __init__(self, settings: Settings) -> None:
         super().__init__()
         self.settings = settings
-        self.setWindowTitle("Taxi24H · Asistente de Voz")
+        self.setWindowTitle(f"Taxi24H · Asistente de Voz v{read_local_version()}")
         self.resize(960, 620)
 
         self.transcript_buffer = TranscriptBuffer()

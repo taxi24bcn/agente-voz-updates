@@ -44,11 +44,15 @@ UPDATE_CHECK_URL = "https://raw.githubusercontent.com/taxi24bcn/agente-voz-updat
 
 # ── Utilidades ───────────────────────────────────────────────────────────────
 
-def _read_local_version() -> str:
-    """Lee la version instalada desde version.txt."""
+def read_local_version() -> str:
+    """Lee la version instalada desde version.txt.
+
+    En modo frozen (PyInstaller 6.x) los archivos de datos van en _internal/,
+    accesible via sys._MEIPASS, no junto al .exe.
+    """
     try:
         if getattr(sys, "frozen", False):
-            base = Path(sys.executable).parent
+            base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
         else:
             base = Path(__file__).resolve().parents[1]
         return (base / "version.txt").read_text(encoding="utf-8").strip()
@@ -118,7 +122,7 @@ class UpdateChecker(QThread):
                 data = json.loads(resp.read().decode("utf-8"))
 
             remote = data.get("version", "0.0.0")
-            local  = _read_local_version()
+            local  = read_local_version()
 
             if _version_tuple(remote) > _version_tuple(local):
                 log.info("Actualizacion disponible: v%s → v%s", local, remote)
