@@ -36,10 +36,11 @@ USER_DATA_DIR = _resolve_user_data_dir()
 CONFIG_DIR    = USER_DATA_DIR / "config"
 LOGS_DIR      = USER_DATA_DIR / "logs"
 SESSIONS_DIR  = LOGS_DIR / "sessions"
+PENDING_DIR   = LOGS_DIR / "pending"
 DOWNLOADS_DIR = USER_DATA_DIR / "downloads"
 
 # Garantiza que todos los directorios del usuario existen antes de que arranque la app
-for _d in (CONFIG_DIR, SESSIONS_DIR, DOWNLOADS_DIR):
+for _d in (CONFIG_DIR, SESSIONS_DIR, PENDING_DIR, DOWNLOADS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 # ── Carga de .env ────────────────────────────────────────────────────────────
@@ -136,10 +137,12 @@ def reload_env_file() -> None:
 
 @dataclass
 class Settings:
-    openai_api_key:     str
-    cable_hint:         str
-    operator_mic_hint:  str
-    google_maps_api_key: str = ""  # vacio → normalizacion RECOGIDA desactivada
+    openai_api_key:       str
+    cable_hint:           str
+    operator_mic_hint:    str
+    google_maps_api_key:  str = ""  # vacio → normalizacion RECOGIDA desactivada
+    cloud_webhook_url:    str = ""  # vacio → solo local
+    cloud_webhook_token:  str = ""  # vacio → solo local
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -155,4 +158,6 @@ class Settings:
             cable_hint=os.getenv("CABLE_HINT", "cable output").strip(),
             operator_mic_hint=os.getenv("OPERATOR_MIC_HINT", "").strip(),
             google_maps_api_key=os.getenv("GOOGLE_MAPS_API_KEY", "").strip(),
+            cloud_webhook_url=os.getenv("CLOUD_WEBHOOK_URL", "").strip(),
+            cloud_webhook_token=os.getenv("CLOUD_WEBHOOK_TOKEN", "").strip(),
         )

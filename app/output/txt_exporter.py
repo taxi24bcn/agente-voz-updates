@@ -48,14 +48,16 @@ def _geo_metrics_block(data: ServiceData) -> str:
     return "\n".join(lines) + "\n"
 
 
-def save_session(transcript: str, service_data: ServiceData) -> Path:
+def save_session(transcript: str, service_data: ServiceData, session_id: str | None = None) -> Path:
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = SESSIONS_DIR / f"session_{ts}.txt"
+    filename = f"{session_id}.txt" if session_id else f"session_{ts}.txt"
+    path = SESSIONS_DIR / filename
     sep = "=" * 60
     geo_block = _geo_metrics_block(service_data)
+    label = session_id or ts
     content = (
-        f"{sep}\nSESION TAXI24H - {ts}\n{sep}\n\n"
+        f"{sep}\nSESION TAXI24H - {label}\n{sep}\n\n"
         "DATOS DEL SERVICIO:\n"
         f"{format_service_text(service_data)}\n"
         f"{geo_block}\n"

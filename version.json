@@ -1,6 +1,6 @@
 {
-  "version": "2.2.0",
-  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.2.0/AgenteVozTaxi24H-2.2.0-Setup.exe",
-  "release_notes": "Auto-detección de micrófono en instalaciones nuevas. Ya no requiere configurar OPERATOR_MIC_HINT manualmente. README con guía completa de configuración de audio.",
-  "sha256": "d0f5a96501ff613a0aafa704d9bebb131243e196ab53210e820eb3e47c45d8f5"
+  "version": "2.3.0",
+  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.3.0/AgenteVozTaxi24H-2.3.0-Setup.exe",
+  "release_notes": "Centralización de sesiones en Google Drive + Sheets. Trazabilidad completa del pipeline de geocodificación para auditar errores de direcciones.",
+  "sha256": "0399a9689ea74254c1db192dc25e2e366cd3641464987bd7b204c2e73bf228d9"
 }
