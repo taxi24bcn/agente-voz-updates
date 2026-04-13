@@ -1,6 +1,6 @@
 {
-  "version": "2.3.0",
-  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.3.0/AgenteVozTaxi24H-2.3.0-Setup.exe",
-  "release_notes": "Centralización de sesiones en Google Drive + Sheets. Trazabilidad completa del pipeline de geocodificación para auditar errores de direcciones.",
-  "sha256": "0399a9689ea74254c1db192dc25e2e366cd3641464987bd7b204c2e73bf228d9"
+  "version": "2.4.0",
+  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.4.0/AgenteVozTaxi24H-2.4.0-Setup.exe",
+  "release_notes": "Inyección automática de claves cloud en el .env del usuario en cada arranque. Sin intervención manual para configurar CLOUD_WEBHOOK_URL y CLOUD_WEBHOOK_TOKEN.",
+  "sha256": "1cd18883e57885b9a3030bb265da5209b3b4ba81945931d032da47fb5b89f0b8"
 }
