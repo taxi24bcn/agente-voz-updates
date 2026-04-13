@@ -1,12 +1,15 @@
 """Configuracion global del asistente de voz Taxi24H."""
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+from app.config.bootstrap_env import ensure_local_env_defaults
 
 
 # ── Resolucion de rutas ─────────────────────────────────────────────────────
@@ -51,12 +54,19 @@ for _d in (CONFIG_DIR, SESSIONS_DIR, PENDING_DIR, DOWNLOADS_DIR):
 _env_primary  = CONFIG_DIR / ".env"
 _env_fallback = BASE_DIR / ".env"
 
-if _env_primary.exists():
-    load_dotenv(_env_primary)
+_logger = logging.getLogger(__name__)
+
+if _env_primary.exists() or not _env_fallback.exists():
+    try:
+        changed = ensure_local_env_defaults(_env_primary)
+        if changed:
+            _logger.info("bootstrap_env: .env local actualizado con claves cloud")
+    except Exception:
+        _logger.exception("bootstrap_env: no se pudo actualizar el .env local — la app sigue sin cloud")
+    load_dotenv(_env_primary, override=False)
 elif _env_fallback.exists():
-    load_dotenv(_env_fallback)
-else:
-    load_dotenv()  # dotenv busca en CWD (util en tests o entornos CI)
+    # Solo en desarrollo local — no se toca el .env primario
+    load_dotenv(_env_fallback, override=False)
 
 
 # ── Constantes de audio ──────────────────────────────────────────────────────
