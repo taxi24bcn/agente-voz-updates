@@ -91,6 +91,7 @@ Las claves se guardan localmente en `%LOCALAPPDATA%\Taxi24H\AgenteVoz\config\.en
 
 | Versión | Fecha | Novedades |
 |---|---|---|
+| 2.3.0 | 2026-04-13 | Centralización sesiones en Drive + Sheets + trazabilidad geo completa |
 | 2.2.0 | 2026-04-13 | Auto-detección micrófono + guía audio Windows en README |
 | 2.1.7 | 2026-04-13 | Fix selector de micrófono en configuración inicial |
 | 2.1.6 | 2026-04-12 | Fix geocodificación intersecciones |

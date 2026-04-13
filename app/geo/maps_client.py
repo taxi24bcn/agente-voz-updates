@@ -41,6 +41,14 @@ class GeoResult:
     raw_status: str
 
 
+@dataclass
+class GeoQueryResult:
+    """Resultado completo de una geocodificacion: candidatos + query usada."""
+    query: str
+    best: Optional[GeoResult]
+    candidates: list[GeoResult]  # todos (hasta 5)
+
+
 def _extract_municipality(components: list[dict], formatted_address: str = "") -> Optional[str]:
     for target_type in (
         "locality",
@@ -143,7 +151,8 @@ class MapsClient:
             raise ValueError("MapsClient requiere una API key no vacía")
         self._api_key = api_key
 
-    def geocode(self, address: str) -> Optional[GeoResult]:
+    def geocode_full(self, address: str) -> GeoQueryResult:
+        """Como geocode() pero devuelve todos los candidatos y la query usada."""
         params = urllib.parse.urlencode({
             "address": address,
             "language": "es",
@@ -161,25 +170,25 @@ class MapsClient:
                 raw = resp.read()
         except urllib.error.HTTPError as exc:
             log.warning("Maps HTTP error %s for address=%r", exc.code, address)
-            return None
+            return GeoQueryResult(query=address, best=None, candidates=[])
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             log.warning("Maps network error for address=%r: %s", address, exc)
-            return None
+            return GeoQueryResult(query=address, best=None, candidates=[])
 
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
             log.warning("Maps JSON parse error for address=%r: %s", address, exc)
-            return None
+            return GeoQueryResult(query=address, best=None, candidates=[])
 
         status = data.get("status", "UNKNOWN")
         if status != "OK":
             log.info("Maps status=%s for address=%r", status, address)
-            return None
+            return GeoQueryResult(query=address, best=None, candidates=[])
 
         results = data.get("results", [])
         if not results:
-            return None
+            return GeoQueryResult(query=address, best=None, candidates=[])
 
         candidates: list[GeoResult] = []
         for result in results[:5]:
@@ -202,7 +211,10 @@ class MapsClient:
                 continue
 
         if not candidates:
-            return None
+            return GeoQueryResult(query=address, best=None, candidates=[])
 
         best = max(candidates, key=lambda item: _score_candidate(address, item))
-        return best
+        return GeoQueryResult(query=address, best=best, candidates=candidates)
+
+    def geocode(self, address: str) -> Optional[GeoResult]:
+        return self.geocode_full(address).best

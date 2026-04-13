@@ -1,6 +1,8 @@
 """Ventana principal del asistente de voz Taxi24H."""
 from __future__ import annotations
 
+import copy
+import json
 import logging
 from typing import Any
 
@@ -21,12 +23,15 @@ from PySide6.QtWidgets import (
 
 from app.audio.capture import DualChannelCapture
 from app.audio.devices import device_name, resolve_capture_devices
-from app.config.settings import PICKUP_GEOCODE_STABLE_SECONDS, Settings
+from app.config.settings import PICKUP_GEOCODE_STABLE_SECONDS, Settings, reload_env_file
 from app.integrations.microsip_http import CallEventBridge
 from app.geo.address_normalizer import AddressNormalizer
 from app.geo.maps_client import MapsClient
 from app.geo.pickup_stability import PickupStabilityTracker
+from app.config.settings import SESSIONS_DIR
 from app.output.clipboard import copy_to_clipboard, format_service_text
+from app.output.cloud_sync import CloudUploader, PendingRetryWorker
+from app.output.session_builder import build_session_json, generate_session_id
 from app.output.txt_exporter import save_session
 from app.parser.schema import FIELD_KEYS, FIELD_LABELS
 from app.parser.service_extractor import ServiceData, ServiceExtractor
@@ -90,9 +95,11 @@ class MainWindow(QMainWindow):
         self.transcript_buffer = TranscriptBuffer()
         self.current_data = ServiceData.empty()
         self.locked_fields: set[str] = set()
+        self._extraction_snapshot: ServiceData = ServiceData.empty()
 
         self._pending_reset: bool = False
         self._pending_phone: str = ""
+        self._cloud_uploaders: list[CloudUploader] = []
 
         self.extractor = ServiceExtractor(settings.openai_api_key)
         self.capture: DualChannelCapture | None = None
@@ -130,6 +137,13 @@ class MainWindow(QMainWindow):
             lambda ver, url, notes, sha: show_update_dialog(self, ver, url, notes, sha)
         )
         self._update_checker.start()
+
+        # Reintento de sesiones pendientes al arrancar (si cloud está activo)
+        if settings.cloud_webhook_url and settings.cloud_webhook_token:
+            self._retry_worker = PendingRetryWorker(
+                settings.cloud_webhook_url, settings.cloud_webhook_token
+            )
+            self._retry_worker.start()
 
     def attach_call_bridge(self, bridge: CallEventBridge) -> None:
         bridge.ringing.connect(self._on_call_ringing)
@@ -170,6 +184,11 @@ class MainWindow(QMainWindow):
         self.status_label.setObjectName("StatusLabel")
         self._set_status("detenido", "idle")
         header_layout.addWidget(self.status_label)
+
+        self.config_button = QPushButton("Configuracion")
+        self.config_button.setMinimumWidth(120)
+        self.config_button.clicked.connect(self._open_config)
+        header_layout.addWidget(self.config_button)
 
         self.start_button = QPushButton("Iniciar escucha")
         self.start_button.setProperty("variant", "accent")
@@ -301,6 +320,30 @@ class MainWindow(QMainWindow):
         dots = {"idle": "●", "active": "●", "warning": "●"}
         self.status_label.setText(f"{dots.get(state, '●')}  Estado: {text}")
         self.status_label.setStyleSheet(_STATUS_STYLES.get(state, _STATUS_STYLES["idle"]))
+
+    # ─── config dialog ─────────────────────────────────────────────────
+
+    def _open_config(self) -> None:
+        """Abre el dialogo de configuracion. Si se guarda, recarga settings."""
+        was_capturing = self.capture is not None
+        if was_capturing:
+            self._stop_capture()
+
+        from app.ui.config_dialog import ConfigDialog
+        dlg = ConfigDialog(self)
+        if dlg.exec() == ConfigDialog.DialogCode.Accepted:
+            reload_env_file()
+            try:
+                self.settings = Settings.from_env()
+                self.extractor._api_key = self.settings.openai_api_key
+                mic_name = self.settings.operator_mic_hint or "(por defecto del sistema)"
+                self._set_status(f"config guardada · mic: {mic_name}", "idle")
+            except RuntimeError as exc:
+                QMessageBox.critical(self, "Error de configuracion", str(exc))
+                return
+
+        if was_capturing:
+            self._start_capture()
 
     # ─── capture control ─────────────────────────────────────────────────
 
@@ -446,6 +489,7 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _on_extraction_ready(self, data: Any) -> None:
         self.current_data = data
+        self._extraction_snapshot = copy.copy(data)
         for key in FIELD_KEYS:
             fw = self.field_widgets[key]
             if not fw.is_locked():
@@ -503,14 +547,71 @@ class MainWindow(QMainWindow):
         self._set_status("copiado al portapapeles", "active")
 
     def _on_save(self) -> None:
-        data = self._read_data_from_ui()
+        final_data = self._read_data_from_ui()
+        # Propagar campos geo del modelo actual al objeto final_data
+        for attr in (
+            "_recogida_raw", "_recogida_status", "_recogida_municipio",
+            "_recogida_place_id", "_recogida_partial_match", "_recogida_latlon",
+            "_geo_google_called", "_geo_retry_called", "_geo_cache_hit",
+            "_geo_operator_edited_pickup", "_geo_norm_result",
+        ):
+            if hasattr(self.current_data, attr):
+                setattr(final_data, attr, getattr(self.current_data, attr))
+
         transcript = self.transcript_buffer.full_text()
+        session_id = generate_session_id()
+
+        # 1. Guardar TXT local
         try:
-            path = save_session(transcript, data)
+            txt_path = save_session(transcript, final_data, session_id)
         except Exception as exc:
             QMessageBox.critical(self, "Error guardando sesion", str(exc))
             return
-        QMessageBox.information(self, "Sesion guardada", f"Guardada en:\n{path}")
+
+        # 2. Construir y guardar JSON local
+        initial_status = (
+            "pending"
+            if (self.settings.cloud_webhook_url and self.settings.cloud_webhook_token)
+            else "local_only"
+        )
+        session_json = build_session_json(
+            session_id=session_id,
+            transcript=transcript,
+            extracted_data=self._extraction_snapshot,
+            final_data=final_data,
+            upload_status=initial_status,
+        )
+        json_path = txt_path.with_suffix(".json")
+        try:
+            json_path.write_text(
+                json.dumps(session_json, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            log.error("_on_save: cannot write JSON for %s: %s", session_id, exc)
+
+        # 3. Informar al operador inmediatamente (sin esperar subida)
+        QMessageBox.information(self, "Sesion guardada", f"Guardada en:\n{txt_path}")
+
+        # 4. Subida en background (si cloud activo)
+        if self.settings.cloud_webhook_url and self.settings.cloud_webhook_token:
+            uploader = CloudUploader(
+                webhook_url=self.settings.cloud_webhook_url,
+                token=self.settings.cloud_webhook_token,
+                session_id=session_id,
+                json_path=json_path,
+                txt_path=txt_path,
+            )
+            uploader.upload_finished.connect(self._on_upload_finished)
+            self._cloud_uploaders.append(uploader)
+            uploader.finished.connect(lambda u=uploader: self._cloud_uploaders.remove(u))
+            uploader.start()
+        else:
+            log.info("_on_save: cloud not configured — session saved locally only (%s)", session_id)
+
+    @Slot(str, str)
+    def _on_upload_finished(self, session_id: str, status: str) -> None:
+        log.info("cloud upload finished: session=%s status=%s", session_id, status)
 
     def _on_clear(self) -> None:
         self._flush_pickup_geocoding()

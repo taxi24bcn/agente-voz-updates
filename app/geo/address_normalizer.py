@@ -21,7 +21,7 @@ from enum import Enum
 from typing import Optional, TYPE_CHECKING
 
 from app.geo.amb_municipalities import is_amb_municipality, normalize_municipality
-from app.geo.maps_client import GeoResult, MapsClient
+from app.geo.maps_client import GeoResult, GeoQueryResult, MapsClient
 from app.geo.pickup_preprocessor import PickupQueryType, PreprocessedPickup, preprocess
 from app.geo.pickup_repair import extract_best_pickup_from_transcript
 
@@ -200,6 +200,29 @@ class _NormalizeResult:
     google_called: bool
     retry_called: bool
     cache_hit: bool
+    # --- campos de trazabilidad geo (schema_version 2) ---
+    decision_reason: Optional[str] = None
+    pickup_preprocessed_text: Optional[str] = None
+    pickup_repaired_text: Optional[str] = None
+    pickup_query_primary: Optional[str] = None
+    pickup_query_retry: Optional[str] = None
+    stage_before_google: Optional[str] = None  # step cerrado del catálogo
+    google_result_count: int = 0
+    was_retry_used: bool = False
+    accepted_candidate_index: Optional[int] = None
+    accepted_place_id: Optional[str] = None
+    accepted_formatted_address: Optional[str] = None
+    # candidatos raw (GeoResult) para construir google_candidates en session_builder
+    _raw_candidates: list = None  # type: ignore[assignment]
+    _accepted_result: Optional[GeoResult] = None
+    # rejection_reason por índice de candidato
+    _candidate_rejection_reasons: dict = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self._raw_candidates is None:
+            self._raw_candidates = []
+        if self._candidate_rejection_reasons is None:
+            self._candidate_rejection_reasons = {}
 
 
 _STREET_TYPE_ES_TO_CA: list[tuple[str, str]] = [
@@ -444,14 +467,17 @@ def _soft_match_score(
     return raw_ratio, soft_ok, canonical_ratio, number_match, fuzzy_ratio
 
 
-def _evaluate_geo_result(result: Optional[GeoResult], prep: PreprocessedPickup) -> tuple[PickupStatus, bool]:
+def _evaluate_geo_result(
+    result: Optional[GeoResult], prep: PreprocessedPickup
+) -> tuple[PickupStatus, bool, Optional[str]]:
     """
     Devuelve:
     - status propuesto
     - acceptable: si se acepta ya sin más retry
+    - rejection_reason: motivo de rechazo (catálogo cerrado) o None si aceptado
     """
     if result is None:
-        return PickupStatus.NO_RESULT, False
+        return PickupStatus.NO_RESULT, False, "google_zero_results"
 
     muni = result.municipality
     in_amb = muni is not None and is_amb_municipality(muni)
@@ -465,8 +491,8 @@ def _evaluate_geo_result(result: Optional[GeoResult], prep: PreprocessedPickup) 
     # Guardarraíl duro: si hay número en source y no coincide, nunca validar ADDRESS
     if prep.query_type == PickupQueryType.ADDRESS and _extract_number(prep.cleaned) is not None and not number_match:
         if in_amb and result.partial_match:
-            return PickupStatus.PARTIAL_MATCH, False
-        return PickupStatus.OUTSIDE_AMB, False
+            return PickupStatus.PARTIAL_MATCH, False, "number_conflict"
+        return PickupStatus.OUTSIDE_AMB, False, "number_conflict"
 
     # Guardarraíl de municipio: si el preprocessor detectó un municipio explícito
     # en la query (p.ej. "Barcelona") y el resultado es de otro municipio AMB
@@ -487,61 +513,60 @@ def _evaluate_geo_result(result: Optional[GeoResult], prep: PreprocessedPickup) 
                 "[PICKUP] municipio_mismatch: query=%r result=%r → rechazado para retry",
                 query_muni_official, result_muni_official,
             )
-            return PickupStatus.OUTSIDE_AMB, False
+            return PickupStatus.OUTSIDE_AMB, False, "municipality_conflict"
 
     # ------------------------------------------------------------------
     # 1) Frase/token canonizado fuerte
     # ------------------------------------------------------------------
     if in_amb and prep.query_type == PickupQueryType.ADDRESS and number_match and canonical_ratio >= 0.80:
-        return PickupStatus.VALIDATED, True
+        return PickupStatus.VALIDATED, True, None
 
     # ------------------------------------------------------------------
     # 2) Resultado limpio y razonable
     # ------------------------------------------------------------------
     if in_amb and soft_ok and not result.partial_match:
-        return PickupStatus.VALIDATED, True
+        return PickupStatus.VALIDATED, True, None
 
     # ------------------------------------------------------------------
     # 3) POI / hub con matching suficiente
-    # Google Place search ya valida que el POI exista en la ubicación,
-    # por lo que si cae dentro del AMB y no es partial_match, aceptamos
-    # aunque los tokens del POI no coincidan con la dirección postal
-    # canónica que devuelve Google (Hospital del Mar → Pg. Marítim).
     # ------------------------------------------------------------------
     if prep.query_type in (PickupQueryType.POI_REFERENCE, PickupQueryType.TRANSIT_HUB):
         if in_amb and not result.partial_match:
-            return PickupStatus.VALIDATED, True
+            return PickupStatus.VALIDATED, True, None
         if in_amb and (canonical_ratio >= 0.50 or fuzzy_ratio >= 0.86 or soft_ok):
-            return PickupStatus.VALIDATED, True
+            return PickupStatus.VALIDATED, True, None
         if in_amb and fuzzy_ratio >= 0.75:
-            return PickupStatus.USABLE_REVIEW, True
+            return PickupStatus.USABLE_REVIEW, True, None
 
     # ------------------------------------------------------------------
     # 4) Fuzzy como último recurso para ADDRESS
-    # Nunca en INTERSECTION
     # ------------------------------------------------------------------
     if in_amb and prep.query_type == PickupQueryType.ADDRESS and number_match:
         if fuzzy_ratio >= 0.86:
-            return PickupStatus.VALIDATED, True
+            return PickupStatus.VALIDATED, True, None
         if fuzzy_ratio >= 0.75:
-            return PickupStatus.USABLE_REVIEW, True
+            return PickupStatus.USABLE_REVIEW, True, None
 
     # ------------------------------------------------------------------
     # 5) Intersections: nunca verde por fuzzy, solo usable_review
     # ------------------------------------------------------------------
     if prep.query_type == PickupQueryType.INTERSECTION:
         if in_amb and (canonical_ratio >= 0.35 or raw_ratio >= 0.28):
-            return PickupStatus.USABLE_REVIEW, True
+            return PickupStatus.USABLE_REVIEW, True, None
 
     # ------------------------------------------------------------------
     # 6) Partial dentro AMB: mantener como revisión útil / parcial
     # ------------------------------------------------------------------
     if in_amb and result.partial_match:
         if prep.query_type == PickupQueryType.ADDRESS and number_match and canonical_ratio >= 0.55:
-            return PickupStatus.USABLE_REVIEW, True
-        return PickupStatus.PARTIAL_MATCH, False
+            return PickupStatus.USABLE_REVIEW, True, None
+        return PickupStatus.PARTIAL_MATCH, False, "partial_match_only"
 
-    return PickupStatus.OUTSIDE_AMB, False
+    if not in_amb:
+        return PickupStatus.OUTSIDE_AMB, False, "candidate_outside_amb"
+
+    # Sin candidato de confianza suficiente
+    return PickupStatus.OUTSIDE_AMB, False, "rejected_low_confidence"
 
 
 def _copy_pickup_state(target: "ServiceData", source: "ServiceData") -> "ServiceData":
@@ -572,108 +597,239 @@ class AddressNormalizer:
         self._cache: dict[CacheKey, _NormalizeResult] = {}
         self._last_raw: str = ""
 
-    def _geocode_with_retry(self, prep: PreprocessedPickup) -> _NormalizeResult:
-        result1 = self._maps.geocode(prep.cleaned)
-        status1, acceptable1 = _evaluate_geo_result(result1, prep)
+    @staticmethod
+    def _score_candidates_with_reasons(
+        qr: "GeoQueryResult",
+        prep: PreprocessedPickup,
+    ) -> tuple[
+        Optional[GeoResult],
+        Optional[int],
+        Optional[str],
+        dict,
+        int,
+    ]:
+        """Evalúa todos los candidatos y devuelve:
+        (best_accepted, accepted_index, decision_reason, rejection_by_idx, result_count)
+        """
+        from app.geo.amb_municipalities import is_amb_municipality as _is_amb
+        candidates = qr.candidates
+        result_count = len(candidates)
+        rejection_by_idx: dict = {}
 
-        if acceptable1 and result1 is not None:
-            muni_official = normalize_municipality(result1.municipality or "")
+        accepted_result: Optional[GeoResult] = None
+        accepted_index: Optional[int] = None
+        final_decision_reason: Optional[str] = None
+
+        # Buscar primer candidato aceptable
+        for idx, cand in enumerate(candidates):
+            _status, acceptable, reason = _evaluate_geo_result(cand, prep)
+            if not acceptable:
+                rejection_by_idx[idx] = reason
+            if acceptable and accepted_result is None:
+                accepted_result = cand
+                accepted_index = idx
+                final_decision_reason = None  # aceptado → reason es "accepted_*"
+                # Determinar decision_reason de aceptación
+                muni = cand.municipality
+                in_amb = muni is not None and _is_amb(muni)
+                if _status == PickupStatus.VALIDATED and in_amb:
+                    final_decision_reason = "accepted_high_confidence"
+                else:
+                    final_decision_reason = "accepted_high_confidence"
+                # Seguimos iterando para calcular rejection del resto
+                continue
+            if accepted_result is not None and idx not in rejection_by_idx:
+                # Los candidatos posteriores al aceptado no se evalúan como rechazo
+                pass
+
+        if accepted_result is None:
+            # Ningún candidato aceptado → calcular decision_reason del fallo
+            if result_count == 0:
+                final_decision_reason = "google_zero_results"
+            else:
+                # Tomar el reason del primer candidato como indicador principal
+                r0 = rejection_by_idx.get(0)
+                # Si varios candidatos válidos → ambiguous
+                valid_amb = [
+                    idx for idx, cand in enumerate(candidates)
+                    if cand.municipality and _is_amb(cand.municipality)
+                ]
+                if len(valid_amb) > 1 and not r0:
+                    final_decision_reason = "multiple_valid_candidates"
+                elif r0:
+                    final_decision_reason = r0
+                else:
+                    final_decision_reason = "no_high_confidence_candidate"
+
+        return accepted_result, accepted_index, final_decision_reason, rejection_by_idx, result_count
+
+    def _geocode_with_retry(self, prep: PreprocessedPickup) -> _NormalizeResult:
+        from app.geo.amb_municipalities import normalize_municipality as _norm_muni
+
+        # ── Intento 1: query primaria (cleaned del preprocessor) ──────────
+        qr1 = self._maps.geocode_full(prep.cleaned)
+        accepted1, acc_idx1, decision_reason1, rejection1, count1 = self._score_candidates_with_reasons(qr1, prep)
+
+        if accepted1 is not None:
+            muni_official = _norm_muni(accepted1.municipality or "")
             return _NormalizeResult(
-                status=status1,
-                formatted_address=result1.formatted_address,
-                lat=result1.lat,
-                lon=result1.lon,
-                place_id=result1.place_id,
-                partial_match=result1.partial_match,
-                municipality=muni_official or result1.municipality,
+                status=_evaluate_geo_result(accepted1, prep)[0],
+                formatted_address=accepted1.formatted_address,
+                lat=accepted1.lat,
+                lon=accepted1.lon,
+                place_id=accepted1.place_id,
+                partial_match=accepted1.partial_match,
+                municipality=muni_official or accepted1.municipality,
                 google_called=True,
                 retry_called=False,
                 cache_hit=False,
+                decision_reason=decision_reason1,
+                pickup_query_primary=prep.cleaned,
+                pickup_query_retry=None,
+                google_result_count=count1,
+                was_retry_used=False,
+                accepted_candidate_index=acc_idx1,
+                accepted_place_id=accepted1.place_id,
+                accepted_formatted_address=accepted1.formatted_address,
+                _raw_candidates=qr1.candidates,
+                _accepted_result=accepted1,
+                _candidate_rejection_reasons=rejection1,
             )
 
+        # ── Intento 2: query enriquecida (con municipio / Barcelona) ──────
         enriched = _build_enriched_query(prep.cleaned, prep.query_type, prep.probable_municipality)
         if not enriched:
+            # Sin retry posible — devolver resultado del intento 1
+            best1 = qr1.best
             return _NormalizeResult(
-                status=status1,
-                formatted_address=result1.formatted_address if result1 else None,
-                lat=result1.lat if result1 else None,
-                lon=result1.lon if result1 else None,
-                place_id=result1.place_id if result1 else None,
-                partial_match=result1.partial_match if result1 else None,
-                municipality=normalize_municipality(result1.municipality or "") if result1 and result1.municipality else (result1.municipality if result1 else None),
-                google_called=result1 is not None,
+                status=_evaluate_geo_result(best1, prep)[0] if best1 else PickupStatus.NO_RESULT,
+                formatted_address=best1.formatted_address if best1 else None,
+                lat=best1.lat if best1 else None,
+                lon=best1.lon if best1 else None,
+                place_id=best1.place_id if best1 else None,
+                partial_match=best1.partial_match if best1 else None,
+                municipality=_norm_muni(best1.municipality or "") if best1 and best1.municipality else (best1.municipality if best1 else None),
+                google_called=bool(best1),
                 retry_called=False,
                 cache_hit=False,
+                decision_reason=decision_reason1,
+                pickup_query_primary=prep.cleaned,
+                pickup_query_retry=None,
+                google_result_count=count1,
+                was_retry_used=False,
+                _raw_candidates=qr1.candidates,
+                _accepted_result=None,
+                _candidate_rejection_reasons=rejection1,
             )
 
         log.debug("geocoding retry enriched=%r", enriched)
-        result2 = self._maps.geocode(enriched)
-        status2, acceptable2 = _evaluate_geo_result(result2, prep)
+        qr2 = self._maps.geocode_full(enriched)
+        accepted2, acc_idx2, decision_reason2, rejection2, count2 = self._score_candidates_with_reasons(qr2, prep)
 
-        if acceptable2 and result2 is not None:
-            muni_official = normalize_municipality(result2.municipality or "")
+        if accepted2 is not None:
+            muni_official = _norm_muni(accepted2.municipality or "")
             return _NormalizeResult(
-                status=status2,
-                formatted_address=result2.formatted_address,
-                lat=result2.lat,
-                lon=result2.lon,
-                place_id=result2.place_id,
-                partial_match=result2.partial_match,
-                municipality=muni_official or result2.municipality,
+                status=_evaluate_geo_result(accepted2, prep)[0],
+                formatted_address=accepted2.formatted_address,
+                lat=accepted2.lat,
+                lon=accepted2.lon,
+                place_id=accepted2.place_id,
+                partial_match=accepted2.partial_match,
+                municipality=muni_official or accepted2.municipality,
                 google_called=True,
                 retry_called=True,
                 cache_hit=False,
+                decision_reason=decision_reason2,
+                pickup_query_primary=prep.cleaned,
+                pickup_query_retry=enriched,
+                google_result_count=count2,
+                was_retry_used=True,
+                accepted_candidate_index=acc_idx2,
+                accepted_place_id=accepted2.place_id,
+                accepted_formatted_address=accepted2.formatted_address,
+                _raw_candidates=qr2.candidates,
+                _accepted_result=accepted2,
+                _candidate_rejection_reasons=rejection2,
             )
 
-        # Tercer intento: tipo de vía en catalán.
-        # Cuando español y enriquecida fallan el guardarraíl de municipio,
-        # probar con el nombre oficial catalán (p.ej. "Carrer de Lepanto").
+        # ── Intento 3: tipo de vía en catalán ─────────────────────────────
         catalan_query = _build_catalan_query(prep.cleaned, prep.query_type, prep.probable_municipality)
         if catalan_query:
             log.debug("geocoding retry catalan=%r", catalan_query)
-            result3 = self._maps.geocode(catalan_query)
-            status3, acceptable3 = _evaluate_geo_result(result3, prep)
-            if acceptable3 and result3 is not None:
-                muni_official = normalize_municipality(result3.municipality or "")
+            qr3 = self._maps.geocode_full(catalan_query)
+            accepted3, acc_idx3, decision_reason3, rejection3, count3 = self._score_candidates_with_reasons(qr3, prep)
+            if accepted3 is not None:
+                muni_official = _norm_muni(accepted3.municipality or "")
                 return _NormalizeResult(
-                    status=status3,
-                    formatted_address=result3.formatted_address,
-                    lat=result3.lat,
-                    lon=result3.lon,
-                    place_id=result3.place_id,
-                    partial_match=result3.partial_match,
-                    municipality=muni_official or result3.municipality,
+                    status=_evaluate_geo_result(accepted3, prep)[0],
+                    formatted_address=accepted3.formatted_address,
+                    lat=accepted3.lat,
+                    lon=accepted3.lon,
+                    place_id=accepted3.place_id,
+                    partial_match=accepted3.partial_match,
+                    municipality=muni_official or accepted3.municipality,
                     google_called=True,
                     retry_called=True,
                     cache_hit=False,
+                    decision_reason=decision_reason3,
+                    pickup_query_primary=prep.cleaned,
+                    pickup_query_retry=catalan_query,
+                    google_result_count=count3,
+                    was_retry_used=True,
+                    accepted_candidate_index=acc_idx3,
+                    accepted_place_id=accepted3.place_id,
+                    accepted_formatted_address=accepted3.formatted_address,
+                    _raw_candidates=qr3.candidates,
+                    _accepted_result=accepted3,
+                    _candidate_rejection_reasons=rejection3,
                 )
 
-        if result2 is not None:
-            muni_official = normalize_municipality(result2.municipality or "")
+        # ── Ningún intento tuvo éxito — usar el mejor de intento 2 ────────
+        best2 = qr2.best
+        if best2 is not None:
+            muni_official = _norm_muni(best2.municipality or "")
             return _NormalizeResult(
-                status=status2,
-                formatted_address=result2.formatted_address,
-                lat=result2.lat,
-                lon=result2.lon,
-                place_id=result2.place_id,
-                partial_match=result2.partial_match,
-                municipality=muni_official or result2.municipality,
+                status=_evaluate_geo_result(best2, prep)[0],
+                formatted_address=best2.formatted_address,
+                lat=best2.lat,
+                lon=best2.lon,
+                place_id=best2.place_id,
+                partial_match=best2.partial_match,
+                municipality=muni_official or best2.municipality,
                 google_called=True,
                 retry_called=True,
                 cache_hit=False,
+                decision_reason=decision_reason2,
+                pickup_query_primary=prep.cleaned,
+                pickup_query_retry=enriched,
+                google_result_count=count2,
+                was_retry_used=True,
+                _raw_candidates=qr2.candidates,
+                _accepted_result=None,
+                _candidate_rejection_reasons=rejection2,
             )
 
+        # Fallback: resultado del intento 1
+        best1 = qr1.best
         return _NormalizeResult(
-            status=status1 if result1 else PickupStatus.NO_RESULT,
-            formatted_address=result1.formatted_address if result1 else None,
-            lat=result1.lat if result1 else None,
-            lon=result1.lon if result1 else None,
-            place_id=result1.place_id if result1 else None,
-            partial_match=result1.partial_match if result1 else None,
-            municipality=normalize_municipality(result1.municipality or "") if result1 and result1.municipality else (result1.municipality if result1 else None),
+            status=_evaluate_geo_result(best1, prep)[0] if best1 else PickupStatus.NO_RESULT,
+            formatted_address=best1.formatted_address if best1 else None,
+            lat=best1.lat if best1 else None,
+            lon=best1.lon if best1 else None,
+            place_id=best1.place_id if best1 else None,
+            partial_match=best1.partial_match if best1 else None,
+            municipality=_norm_muni(best1.municipality or "") if best1 and best1.municipality else (best1.municipality if best1 else None),
             google_called=True,
             retry_called=True,
             cache_hit=False,
+            decision_reason=decision_reason1 or "no_high_confidence_candidate",
+            pickup_query_primary=prep.cleaned,
+            pickup_query_retry=enriched,
+            google_result_count=count1,
+            was_retry_used=True,
+            _raw_candidates=qr1.candidates,
+            _accepted_result=None,
+            _candidate_rejection_reasons=rejection1,
         )
 
     def _apply_result(
@@ -696,6 +852,8 @@ class AddressNormalizer:
         data._geo_google_called = norm_result.google_called
         data._geo_retry_called = norm_result.retry_called
         data._geo_cache_hit = norm_result.cache_hit
+        # Trazabilidad completa — usada por session_builder para geo_diagnostics
+        data._geo_norm_result = norm_result
         data._recogida_latlon = (
             (norm_result.lat, norm_result.lon)
             if norm_result.lat is not None and norm_result.lon is not None
@@ -816,6 +974,25 @@ class AddressNormalizer:
             return self._apply_result(data, raw, cached_copy, pickup_for_geocoding)
 
         norm_result = self._geocode_with_retry(prep)
+
+        # Enriquecer resultado con datos del pipeline previos a Google
+        # (no están disponibles dentro de _geocode_with_retry)
+        repaired_text = repair.address_for_geocoding
+        preprocessed_text = prep.cleaned
+        original_extracted = raw  # raw = texto original extraído por el LLM
+
+        # stage_before_google: último paso de transformación antes de llamar a Google
+        if preprocessed_text != repaired_text:
+            stage_bg = "preprocess_pickup"
+        elif repair.correction_detected and repaired_text != original_extracted:
+            stage_bg = "repair_pickup"
+        else:
+            stage_bg = "extracted_pickup"
+
+        norm_result.pickup_repaired_text = repaired_text
+        norm_result.pickup_preprocessed_text = preprocessed_text
+        norm_result.stage_before_google = stage_bg
+
         self._cache[cache_key] = norm_result
         self._last_raw = raw
         return self._apply_result(data, raw, norm_result, pickup_for_geocoding)
