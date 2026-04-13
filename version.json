@@ -1,6 +1,6 @@
 {
-  "version": "2.4.0",
-  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.4.0/AgenteVozTaxi24H-2.4.0-Setup.exe",
-  "release_notes": "Inyección automática de claves cloud en el .env del usuario en cada arranque. Sin intervención manual para configurar CLOUD_WEBHOOK_URL y CLOUD_WEBHOOK_TOKEN.",
-  "sha256": "1cd18883e57885b9a3030bb265da5209b3b4ba81945931d032da47fb5b89f0b8"
+  "version": "2.4.1",
+  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.4.1/AgenteVozTaxi24H-2.4.1-Setup.exe",
+  "release_notes": "Hotfix: corrige el diálogo de actualización que aparecía en cada arranque. Título de ventana muestra la versión instalada.",
+  "sha256": "340bed8aacd1f7dddfb8f3b0d0d5192242ce840b9890a7ece55de8f77d6472d8"
 }
