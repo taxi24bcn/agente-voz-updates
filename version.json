@@ -1,6 +1,6 @@
 {
-  "version": "2.4.2",
-  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.4.2/AgenteVozTaxi24H-2.4.2-Setup.exe",
-  "release_notes": "Fix: error SSL al comprobar actualizaciones (CERTIFICATE_VERIFY_FAILED). Incluye certifi en el build y aplica el fix también a sincronización Drive/Sheets y geocoding. Las instalaciones v2.4.1 afectadas requieren instalación manual inicial.",
-  "sha256": "0e859d9f62e0b6f53c5dfa2eebeb1dafc14e6b76bbab70ef201c0f34f4b2bd25"
+  "version": "2.4.3",
+  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.4.3/AgenteVozTaxi24H-2.4.3-Setup.exe",
+  "release_notes": "Build de validación del fix SSL de v2.4.2. Sin cambios funcionales.",
+  "sha256": "7f74f4a02f1dac640ded4995e11369229f504ad18c5a6e985dd7fbdd48cd5ece"
 }
