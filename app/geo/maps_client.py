@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from app.geo.amb_municipalities import normalize_municipality, _norm as _norm_muni
+from app.net.ssl_utils import get_ssl_context
 
 log = logging.getLogger(__name__)
 
@@ -166,7 +167,7 @@ class MapsClient:
 
         try:
             req = urllib.request.Request(url, headers={"Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:
+            with urllib.request.urlopen(req, timeout=_TIMEOUT_S, context=get_ssl_context()) as resp:
                 raw = resp.read()
         except urllib.error.HTTPError as exc:
             log.warning("Maps HTTP error %s for address=%r", exc.code, address)

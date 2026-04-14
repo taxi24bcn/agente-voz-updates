@@ -25,6 +25,7 @@ from typing import Any, Optional
 from PySide6.QtCore import QThread, Signal
 
 from app.config.settings import PENDING_DIR, SESSIONS_DIR
+from app.net.ssl_utils import get_ssl_context
 
 log = logging.getLogger(__name__)
 
@@ -146,7 +147,7 @@ def _do_upload(
         headers={"Content-Type": "application/json; charset=utf-8"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:
+    with urllib.request.urlopen(req, timeout=_TIMEOUT_S, context=get_ssl_context()) as resp:
         raw = resp.read()
     return json.loads(raw)
 

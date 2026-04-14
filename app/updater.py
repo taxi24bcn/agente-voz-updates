@@ -34,6 +34,8 @@ from pathlib import Path
 from PySide6.QtCore import QThread, Qt, Signal
 from PySide6.QtWidgets import QApplication, QMessageBox, QProgressDialog, QWidget
 
+from app.net.ssl_utils import get_ssl_context
+
 log = logging.getLogger(__name__)
 
 # URL publica del version.json publicado con cada release.
@@ -118,7 +120,9 @@ class UpdateChecker(QThread):
             import json
             import urllib.request
 
-            with urllib.request.urlopen(UPDATE_CHECK_URL, timeout=6) as resp:
+            with urllib.request.urlopen(
+                UPDATE_CHECK_URL, timeout=6, context=get_ssl_context()
+            ) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
 
             remote = data.get("version", "0.0.0")
@@ -205,7 +209,9 @@ class UpdateDownloader(QThread):
             sha256     = hashlib.sha256()
             chunk_size = 1024 * 128  # 128 KB por chunk
 
-            with urllib.request.urlopen(request, timeout=30) as resp:
+            with urllib.request.urlopen(
+                request, timeout=30, context=get_ssl_context()
+            ) as resp:
                 content_length = resp.headers.get("Content-Length", "").strip()
                 if content_length.isdigit():
                     total_size = int(content_length)
