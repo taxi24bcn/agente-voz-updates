@@ -155,6 +155,28 @@ NO debes poner en observaciones NUNCA:
 Si no hay ninguna observacion relevante, escribe "PENDIENTE"."""
 
 
+def _log_usage(resp) -> None:
+    """Loguea tokens consumidos por la extracción, incluyendo cached_tokens.
+
+    Permite verificar en producción que el prompt caching del SYSTEM_PROMPT
+    está dando hits (cached_tokens > 0 a partir de la segunda llamada de una
+    misma sesión).
+    """
+    usage = getattr(resp, "usage", None)
+    if usage is None:
+        return
+    prompt_tokens = getattr(usage, "prompt_tokens", 0)
+    completion_tokens = getattr(usage, "completion_tokens", 0)
+    details = getattr(usage, "prompt_tokens_details", None)
+    cached = getattr(details, "cached_tokens", 0) if details is not None else 0
+    log.info(
+        "parser usage: prompt=%d cached=%d completion=%d",
+        prompt_tokens,
+        cached,
+        completion_tokens,
+    )
+
+
 @dataclass
 class ServiceData:
     # Public fields (shown in UI and exported)
@@ -259,6 +281,11 @@ class ServiceExtractor:
             f"Hora actual: {now.strftime('%H:%M')}."
         )
 
+        # Orden pensado para maximizar prompt caching automático de OpenAI:
+        # el SYSTEM_PROMPT va íntegro en su propio mensaje (≥1024 tokens, estable
+        # entre llamadas) → ese prefijo cachea al 50% desde el segundo uso.
+        # En el user_content sí hay contenido variable (fecha, transcripción,
+        # locked), así que no intentamos cachearlo.
         user_content = (
             date_ctx
             + "\n\nTranscripcion de la llamada:\n\n"
@@ -280,6 +307,7 @@ class ServiceExtractor:
                 },
                 temperature=0,
             )
+            _log_usage(resp)
             choice = resp.choices[0] if resp.choices else None
             content = (choice.message.content if choice else None) or "{}"
             payload = json.loads(content)

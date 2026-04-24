@@ -85,6 +85,7 @@ class MainWindow(QMainWindow):
     _transcript_appended = Signal(str, str)
     _stt_error = Signal(str, str)  # (speaker, message)
     _auth_error = Signal()
+    _stt_inactivity = Signal()
 
     def __init__(self, settings: Settings) -> None:
         super().__init__()
@@ -129,6 +130,7 @@ class MainWindow(QMainWindow):
         self._transcript_appended.connect(self._on_transcript_appended)
         self._stt_error.connect(self._on_stt_error)
         self._auth_error.connect(self._on_auth_error)
+        self._stt_inactivity.connect(self._on_stt_inactivity)
         self.extractor.set_auth_error_handler(self._emit_auth_error_async)
 
         # Comprobador de actualizaciones (hilo daemon, no bloquea la UI)
@@ -371,6 +373,7 @@ class MainWindow(QMainWindow):
                 operador_queue=self.capture.queue_operador,
                 on_transcript=self._emit_transcript_async,
                 on_error=self._emit_stt_error_async,
+                on_inactivity=self._emit_stt_inactivity_async,
             )
             self.stt_client.start()
         except Exception as exc:
@@ -416,7 +419,20 @@ class MainWindow(QMainWindow):
     def _on_stt_error(self, speaker: str, message: str) -> None:
         """Recibe errores STT en el hilo principal. Solo cambia el status; no interrumpe."""
         log.warning("STT error canal [%s]: %s", speaker, message)
-        self._set_status(f"error STT [{speaker}] — ver log", "warning")
+        self._set_status(f"error STT [{speaker}] — {message}", "warning")
+
+    def _emit_stt_inactivity_async(self) -> None:
+        """Llamado desde el watchdog thread — emite señal Qt para cruzar al hilo principal."""
+        self._stt_inactivity.emit()
+
+    @Slot()
+    def _on_stt_inactivity(self) -> None:
+        """El watchdog detectó inactividad prolongada o estado terminal en todos
+        los workers — detenemos la captura para no seguir consumiendo saldo."""
+        log.warning("STT inactividad / terminal — deteniendo captura automáticamente")
+        if self.capture is not None:
+            self._stop_capture()
+        self._set_status("captura detenida por inactividad", "warning")
 
     def _emit_auth_error_async(self) -> None:
         """Llamado desde el worker thread — emite señal Qt para cruzar al hilo principal."""

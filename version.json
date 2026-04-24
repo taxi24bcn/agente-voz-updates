@@ -1,6 +1,6 @@
 {
-  "version": "2.4.3",
-  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.4.3/AgenteVozTaxi24H-2.4.3-Setup.exe",
-  "release_notes": "Build de validación del fix SSL de v2.4.2. Sin cambios funcionales.",
-  "sha256": "7f74f4a02f1dac640ded4995e11369229f504ad18c5a6e985dd7fbdd48cd5ece"
+  "version": "2.5.0",
+  "download_url": "https://github.com/taxi24bcn/agente-voz-updates/releases/download/v2.5.0/AgenteVozTaxi24H-2.5.0-Setup.exe",
+  "release_notes": "Optimización de consumo OpenAI: circuit breaker ante saldo agotado, backoff en rate limit, guard anti-ruido, watchdog de inactividad, prompt caching del parser, logging a archivo permanente.",
+  "sha256": "baeaefe21975bfd07083c97cbfb919c7ab21d1dbf012e64097ce699eaaa27a8b"
 }

@@ -82,6 +82,22 @@ SILENCE_FRAMES_TO_FLUSH = 30    # 30 * 20 ms = 600 ms de silencio → flush
 MIN_FLUSH_SECONDS       = 1.0
 MAX_BUFFER_SECONDS      = 15.0
 
+# STT cost guards (v2.5.0)
+# Ratio mínimo de frames con voz (> SILENCE_DBFS_THRESHOLD) sobre el total
+# del buffer para decidir que vale la pena enviarlo a OpenAI. Con ruido
+# ambiente sostenido (ventilador, coche) el RMS global supera el umbral
+# aunque no haya voz; este guard evita esas llamadas vacías.
+STT_MIN_VOICED_RATIO = 0.15
+
+# Backoff del circuit breaker tras 429 transitorio / errores de red.
+# Alineado con cloud_sync.py: 30 s → 60 s → 120 s → máx 300 s.
+STT_BACKOFF_SECONDS = (30.0, 60.0, 120.0, 300.0)
+
+# Tiempo (segundos) sin producir transcripción real antes de que el watchdog
+# detenga la captura. Sólo dispara si MicroSIP no emitió `ended` por algún
+# fallo (crash de MicroSIP, operador inicia captura a mano, etc.).
+STT_INACTIVITY_TIMEOUT_S = 600.0  # 10 min
+
 # ── Modelos ──────────────────────────────────────────────────────────────────
 STT_MODEL    = "gpt-4o-transcribe"
 LLM_MODEL    = "gpt-4o-mini"
